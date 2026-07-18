@@ -1,4 +1,5 @@
 use super::laberinto::Direcciones;
+use crate::{ALTURA_L, ANCHO_L};
 use eframe::egui::{self, Pos2, Vec2};
 use std::any::Any;
 use std::fmt::Debug;
@@ -46,7 +47,19 @@ pub trait Character: Object2D {
     fn r#move(&mut self, delta: f32) {
         let vel = self.velocity() * delta;
 
-        let pos = self.posision() + vel;
+        let mut pos = self.posision() + vel;
+        if pos.x < 0.0 {
+            pos.x = ANCHO_L;
+        }
+        if pos.x > ANCHO_L {
+            pos.x = 0.0;
+        }
+        if pos.y < 0.0 {
+            pos.y = ALTURA_L;
+        }
+        if pos.y > ALTURA_L {
+            pos.y = 0.0;
+        }
 
         self.set_posision(pos);
     }

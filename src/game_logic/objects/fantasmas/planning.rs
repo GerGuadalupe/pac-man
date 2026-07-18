@@ -145,7 +145,7 @@ impl Fantasma {
             } else {
                 self.ruta = VecDeque::new();
             }
+            self.estado = super::utils::State::Execute;
         }
-        self.estado = super::utils::State::Execute
     }
 }

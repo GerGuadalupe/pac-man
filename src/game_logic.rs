@@ -34,7 +34,7 @@ impl Game {
             if fantasma.velocity() == Vec2::ZERO && !fantasma.is_planning() {
                 fantasma
                     .planning(Arc::clone(&self.maze), self.jugador.grid_pos())
-                    .unwrap();
+                    .expect(format!("el fantasma {:?} ha provocado una falla", fantasma).as_str());
             }
             fantasma.try_get_plan();
         }

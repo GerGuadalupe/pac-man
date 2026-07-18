@@ -11,11 +11,11 @@ mod utils;
 
 static TEMP_V: f32 = {
     let distancia: f32 = 1080.0 / 19.0;
-    distancia / 160.0
+    (distancia / 160.0) * 0.5
 };
 static TEMP_H: f32 = {
     let distancia: f32 = 1920.0 / 31.0;
-    distancia / 160.0
+    (distancia / 160.0) * 0.5
 };
 
 #[derive(Debug)]
@@ -103,9 +103,7 @@ impl Character for Fantasma {
                 if let Some(direccion) = self.next_direction() {
                     match direccion {
                         Direcciones::Este | Direcciones::Oeste => {
-                            let dist_anclaje =
-                                (self.posision().y / (super::pared::PARED_SIZE.y)).fract();
-                            if dist_anclaje <= 0.58 && dist_anclaje >= 0.46 {
+                            if self.centrado_en_casilla() {
                                 if *direccion == Direcciones::Este {
                                     self.set_velocity(Vec2 { x: 1.0, y: 0.0 });
                                 } else {
@@ -116,9 +114,7 @@ impl Character for Fantasma {
                             }
                         }
                         Direcciones::Norte | Direcciones::Sur => {
-                            let dist_anclaje =
-                                (self.posision().x / (super::pared::PARED_SIZE.x)).fract();
-                            if dist_anclaje <= 0.58 && dist_anclaje >= 0.46 {
+                            if self.centrado_en_casilla() {
                                 if *direccion == Direcciones::Norte {
                                     self.set_velocity(vec2(0.0, -1.0));
                                 } else {
@@ -134,15 +130,7 @@ impl Character for Fantasma {
                 }
             }
             utils::State::Standby => {
-                let dist_anclaje = (
-                    (self.posision().x / (super::pared::PARED_SIZE.x)).fract(),
-                    (self.posision().y / (super::pared::PARED_SIZE.y)).fract(),
-                );
-                if dist_anclaje.0 <= 0.58
-                    && dist_anclaje.0 >= 0.46
-                    && dist_anclaje.1 <= 0.58
-                    && dist_anclaje.1 >= 0.46
-                {
+                if self.centrado_en_casilla() {
                     self.velocity = Vec2::ZERO;
                 }
             }
@@ -160,8 +148,6 @@ impl Character for Fantasma {
 
 impl Fantasma {
     pub fn new(tipo: TipoFantasma) -> Self {
-        print!("temp h: {} | ", TEMP_H);
-        println!("temp v: {}", TEMP_V);
         let mut fantasma = Self {
             temp: 0.0,
             speed: 160.0,
@@ -183,5 +169,16 @@ impl Fantasma {
 
     pub fn is_planning(&self) -> bool {
         self.estado == utils::State::Planning
+    }
+
+    fn centrado_en_casilla(&self) -> bool {
+        let dist_anclaje = (
+            (self.posision().x / (super::pared::PARED_SIZE.x)).fract(),
+            (self.posision().y / (super::pared::PARED_SIZE.y)).fract(),
+        );
+        dist_anclaje.0 <= 0.58
+            && dist_anclaje.0 >= 0.46
+            && dist_anclaje.1 <= 0.58
+            && dist_anclaje.1 >= 0.46
     }
 }
