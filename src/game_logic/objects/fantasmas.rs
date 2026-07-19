@@ -4,24 +4,26 @@ use crate::game_logic::{
 };
 use eframe::egui::{self, Pos2, Vec2, vec2};
 use std::collections::VecDeque;
+use utils::Timer;
 
 pub use utils::TipoFantasma;
 mod planning;
 mod utils;
 
+const VEL_BASE: f32 = 190.0;
 static TEMP_V: f32 = {
     let distancia: f32 = 1080.0 / 19.0;
-    (distancia / 160.0) * 0.5
+    (distancia / VEL_BASE) * 0.5
 };
 static TEMP_H: f32 = {
     let distancia: f32 = 1920.0 / 31.0;
-    (distancia / 160.0) * 0.5
+    (distancia / VEL_BASE) * 0.5
 };
 
 #[derive(Debug)]
 pub struct Fantasma {
     tipo: utils::TipoFantasma,
-    temp: f32,
+    temp: Timer,
     size: f32,
     posision: Pos2,
     velocity: Vec2,
@@ -58,7 +60,7 @@ impl Object2D for Fantasma {
     fn init(&mut self) {
         use super::pared::PARED_SIZE;
         self.size = (PARED_SIZE).length() / 3.4;
-        self.colider.radio = self.size;
+        self.colider.radio = self.size * 0.9;
 
         self.set_posision(
             self.posision()
@@ -94,9 +96,12 @@ impl Character for Fantasma {
         self.velocity
     }
     fn logic(&mut self, i: &egui::InputState) {
-        if self.temp > 0.0 {
-            self.temp -= i.stable_dt;
+        self.temp.cuentra_atras(i.stable_dt);
+        if !self.temp.consume() {
             return;
+        }
+        if self.temp.plan() {
+            self.estado = utils::State::Standby;
         }
         match self.estado {
             utils::State::Execute => {
@@ -110,7 +115,7 @@ impl Character for Fantasma {
                                     self.set_velocity(Vec2 { x: -1.0, y: 0.0 });
                                 }
                                 self.consume_direction();
-                                self.temp = TEMP_H;
+                                self.temp.set_consume_time(TEMP_H);
                             }
                         }
                         Direcciones::Norte | Direcciones::Sur => {
@@ -121,7 +126,7 @@ impl Character for Fantasma {
                                     self.set_velocity(vec2(0.0, 1.0));
                                 }
                                 self.consume_direction();
-                                self.temp = TEMP_V;
+                                self.temp.set_consume_time(TEMP_V);
                             }
                         }
                     }
@@ -138,19 +143,19 @@ impl Character for Fantasma {
         }
     }
 
-    fn grid_pos(&self) -> (usize, usize) {
-        (
-            (self.posision().y / (super::pared::PARED_SIZE.y)).trunc() as usize,
-            (self.posision().x / (super::pared::PARED_SIZE.x)).trunc() as usize,
-        )
+    fn grid_pos(&self) -> Pos2 {
+        Pos2::from((
+            (self.posision().x / (super::pared::PARED_SIZE.x)).trunc(),
+            (self.posision().y / (super::pared::PARED_SIZE.y)).trunc(),
+        ))
     }
 }
 
 impl Fantasma {
     pub fn new(tipo: TipoFantasma) -> Self {
         let mut fantasma = Self {
-            temp: 0.0,
-            speed: 160.0,
+            temp: Timer::new(),
+            speed: VEL_BASE,
             chanel: utils::Chanel::new(),
             colider: Colider {
                 radio: 0.0,
@@ -177,8 +182,8 @@ impl Fantasma {
             (self.posision().y / (super::pared::PARED_SIZE.y)).fract(),
         );
         dist_anclaje.0 <= 0.58
-            && dist_anclaje.0 >= 0.46
+            && dist_anclaje.0 >= 0.42
             && dist_anclaje.1 <= 0.58
-            && dist_anclaje.1 >= 0.46
+            && dist_anclaje.1 >= 0.42
     }
 }

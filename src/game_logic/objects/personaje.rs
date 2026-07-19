@@ -14,6 +14,7 @@ pub struct Player {
     rotation: f32,
     next_direction: Option<Direcciones>,
     puntaje: u32,
+    vivo: bool,
 }
 
 impl Object2D for Player {
@@ -113,7 +114,8 @@ impl Character for Player {
                     }
                     moneda.tomar_moneda();
                 }
-                _ => todo!(),
+                super::TipoColider::Enemigo => self.vivo = false,
+                super::TipoColider::Jugador => (),
             }
         }
     }
@@ -177,11 +179,11 @@ impl Character for Player {
         }
     }
 
-    fn grid_pos(&self) -> (usize, usize) {
-        (
-            (self.posision().y / (super::pared::PARED_SIZE.y)).trunc() as usize,
-            (self.posision().x / (super::pared::PARED_SIZE.x)).trunc() as usize,
-        )
+    fn grid_pos(&self) -> Pos2 {
+        Pos2::from((
+            (self.posision().x / (super::pared::PARED_SIZE.x)).trunc(),
+            (self.posision().y / (super::pared::PARED_SIZE.y)).trunc(),
+        ))
     }
 }
 
@@ -197,10 +199,11 @@ impl Player {
             frames: Vec::new(),
             frame: 0,
             velocity: Vec2::ZERO,
-            speed: 160.0,
+            speed: 190.0,
             rotation: 0.0,
             next_direction: None,
             puntaje: 0,
+            vivo: true,
         };
 
         jugador.init();
@@ -209,5 +212,8 @@ impl Player {
     }
     pub fn puntaje(&self) -> u32 {
         self.puntaje
+    }
+    pub fn vivo(&self) -> bool {
+        self.vivo
     }
 }

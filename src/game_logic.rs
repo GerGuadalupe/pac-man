@@ -18,6 +18,7 @@ pub struct Game {
     pub actual_size: Option<Vec2>,
     actual_transform: TSTransform,
     monedas: Vec<Moneda>,
+    game_over: bool,
 }
 
 impl Game {
@@ -26,19 +27,34 @@ impl Game {
     }
 
     pub fn logic(&mut self, delta: f32, i: &egui::InputState) {
-        self.jugador.logic(i);
-        self.jugador.r#move(delta);
-        for fantasma in &mut self.fantasmas {
-            fantasma.logic(i);
-            fantasma.r#move(delta);
-            if fantasma.velocity() == Vec2::ZERO && !fantasma.is_planning() {
-                fantasma
-                    .planning(Arc::clone(&self.maze), self.jugador.grid_pos())
-                    .expect(format!("el fantasma {:?} ha provocado una falla", fantasma).as_str());
+        if !self.game_over {
+            self.jugador.logic(i);
+            self.jugador.r#move(delta);
+            for fantasma in &mut self.fantasmas {
+                fantasma.logic(i);
+                fantasma.r#move(delta);
+                if fantasma.velocity() == Vec2::ZERO && !fantasma.is_planning() {
+                    fantasma
+                        .planning(
+                            Arc::clone(&self.maze),
+                            self.jugador.grid_pos(),
+                            self.jugador.velocity(),
+                        )
+                        .expect(
+                            format!("el fantasma {:?} ha provocado una falla", fantasma).as_str(),
+                        );
+                }
+                fantasma.try_get_plan();
             }
-            fantasma.try_get_plan();
+            self.resolve_colisions();
+            if !self.jugador.vivo() {
+                self.game_over = true
+            }
+        } else {
+            if i.key_pressed(egui::Key::R) {
+                self.reset();
+            }
         }
-        self.resolve_colisions();
     }
     pub fn set_transform(&mut self, transform: TSTransform) {
         self.actual_transform = transform;
@@ -68,6 +84,9 @@ impl Game {
         for moneda in &mut self.monedas {
             self.jugador.colision(moneda);
         }
+        for fantasma in &mut self.fantasmas {
+            self.jugador.colision(fantasma);
+        }
     }
     pub fn puntaje(&self) -> u32 {
         self.jugador.puntaje()
@@ -76,7 +95,7 @@ impl Game {
 
 impl Default for Game {
     fn default() -> Self {
-        Self {
+        let mut juego = Self {
             maze: Arc::new(laberinto::maze_maker()),
             paredes: Vec::new(),
             actual_size: None,
@@ -84,13 +103,15 @@ impl Default for Game {
             jugador: Player::new(),
             monedas: Vec::new(),
             fantasmas: Vec::new(),
-        }
-        .init()
+            game_over: false,
+        };
+        juego.init();
+        juego
     }
 }
 
 impl Game {
-    fn init(mut self) -> Self {
+    fn init(&mut self) {
         for (i, fila) in self.maze.iter().enumerate() {
             for (j, casilla) in fila.iter().enumerate() {
                 match casilla {
@@ -108,6 +129,14 @@ impl Game {
             .push(Fantasma::new(objects::fantasmas::TipoFantasma::Rojo));
         self.fantasmas
             .push(Fantasma::new(objects::fantasmas::TipoFantasma::Rosa));
-        self
+    }
+    fn reset(&mut self) {
+        self.jugador = Player::new();
+        self.fantasmas.clear();
+        self.monedas.clear();
+        self.game_over = false;
+        self.paredes.clear();
+
+        self.init();
     }
 }

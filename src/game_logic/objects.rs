@@ -42,7 +42,7 @@ pub trait Character: Object2D {
 
     fn consume_direction(&mut self) -> Option<Direcciones>;
 
-    fn grid_pos(&self) -> (usize, usize);
+    fn grid_pos(&self) -> Pos2;
 
     fn r#move(&mut self, delta: f32) {
         let vel = self.velocity() * delta;

@@ -1,9 +1,11 @@
 use super::Direcciones;
+use eframe::egui::Pos2;
+
 use crate::game_logic::{
     laberinto::Casilla,
     objects::{
         Character,
-        fantasmas::{Fantasma, planning::EstadoRecorrido::Interrump},
+        fantasmas::{Fantasma, planning::EstadoRecorrido::Interrump, utils::TipoFantasma},
     },
 };
 use std::collections::VecDeque;
@@ -15,26 +17,51 @@ impl Fantasma {
     pub fn planning(
         &mut self,
         mapa: Arc<Matriz<Casilla>>,
-        pacman_pos: (usize, usize),
+        pacman_pos: Pos2,
+        pacman_vel: eframe::egui::Vec2,
     ) -> Result<(), String> {
+        let objetivo;
+        match self.tipo {
+            super::TipoFantasma::Rojo => objetivo = pacman_pos,
+            super::TipoFantasma::Rosa => objetivo = pacman_pos + (pacman_vel.normalized() * 2.0),
+            super::TipoFantasma::Azul => {
+                let pos_1 = pacman_pos + (pacman_vel.normalized() * 2.0);
+                let dist = pos_1 - self.grid_pos();
+                let mut obj = self.grid_pos() + (dist * 2.0);
+                objetivo = loop {
+                    if obj.x < 0.0 || obj.y < 0.0 {
+                        break pacman_pos;
+                    }
+                    let vec = Vec::new();
+                    if let Some(&Casilla::Nodo(_)) =
+                        mapa.get(obj.y as usize).unwrap_or(&vec).get(obj.x as usize)
+                    {
+                        break obj;
+                    }
+                    if obj.x > obj.y {
+                        obj.x -= 1.0;
+                    } else {
+                        obj.y -= 1.0;
+                    }
+                }
+            }
+            super::TipoFantasma::Naranja => objetivo = pacman_pos,
+        }
         self.estado = super::utils::State::Planning;
         let retorno = self.chanel.sender();
-        let self_pos = self.grid_pos();
+        let tipo = self.tipo;
+        let objetivo = {
+            let Pos2 { x, y } = objetivo;
+            (y as usize, x as usize)
+        };
+        let self_pos = {
+            let Pos2 { x, y } = self.grid_pos();
+            (y as usize, x as usize)
+        };
 
-        match (
-            &mapa[pacman_pos.0][pacman_pos.1],
-            &mapa[self_pos.0][self_pos.1],
-        ) {
-            (&Casilla::Nodo(_), &Casilla::Nodo(_)) => (),
-            _ => {
-                return Err(format!(
-                    r#"
-posisión de pacman = {:#?}
-posisión del fantasma = {:#?}
-                "#,
-                    pacman_pos, self_pos
-                ));
-            }
+        match &mapa[self_pos.0][self_pos.1] {
+            &Casilla::Nodo(_) => (),
+            _ => return Err(String::from("por cula del fantasma")),
         }
 
         thread::spawn(move || {
@@ -42,12 +69,13 @@ posisión del fantasma = {:#?}
                 vec![vec![f32::INFINITY; mapa[0].len()]; mapa.len()];
 
             mapa_distancias[self_pos.0][self_pos.1] = 0.0;
-            match recorrido(&*mapa, &mut mapa_distancias, self_pos, pacman_pos) {
-                EstadoRecorrido::Interrump => panic!("el fantasma está softlock"),
+            match recorrido(&*mapa, &mut mapa_distancias, self_pos, objetivo, tipo) {
+                EstadoRecorrido::Interrump => retorno.send(None),
                 EstadoRecorrido::Error(err) => panic!("error al calcular posisiones => {}", err),
                 EstadoRecorrido::Exito(ruta) => retorno.send(ruta),
             }
         });
+        self.temp.set_plan_time(5.0);
         Ok(())
     }
 }
@@ -57,6 +85,7 @@ fn recorrido(
     mapa_distancias: &mut Matriz<f32>,
     inicio: (usize, usize),
     objetivo: (usize, usize),
+    tipo: TipoFantasma,
 ) -> EstadoRecorrido {
     if objetivo == inicio {
         return EstadoRecorrido::Exito(None);
@@ -106,7 +135,7 @@ fn recorrido(
         if (mapa_distancias[i][j] + 1.0) < mapa_distancias[n_i][n_j] {
             mapa_distancias[n_i][n_j] = mapa_distancias[i][j] + 1.0;
             if let EstadoRecorrido::Exito(recorrido) =
-                recorrido(mapa, mapa_distancias, (n_i, n_j), objetivo)
+                recorrido(mapa, mapa_distancias, (n_i, n_j), objetivo, tipo)
             {
                 match recorrido {
                     Some(mut recorrido) => {
@@ -121,12 +150,14 @@ fn recorrido(
     if posibles_caminos.len() == 0 {
         return Interrump;
     }
-    let mut camino_corto: usize = 0;
-    for i in 1..posibles_caminos.len() {
-        if posibles_caminos[i].len() < posibles_caminos[camino_corto].len() {
-            camino_corto = i;
-        }
-    }
+    posibles_caminos.sort_by_key(|v| match tipo {
+        TipoFantasma::Naranja => (v.get(0).unwrap() != &Direcciones::Norte, v.len()),
+        TipoFantasma::Rosa => (v.get(0).unwrap() != &Direcciones::Sur, v.len()),
+        TipoFantasma::Rojo => (v.get(0).unwrap() != &Direcciones::Este, v.len()),
+        TipoFantasma::Azul => (v.get(0).unwrap() != &Direcciones::Oeste, v.len()),
+    });
+
+    let camino_corto: usize = 0;
 
     return EstadoRecorrido::Exito(Some(posibles_caminos.remove(camino_corto)));
 }
@@ -142,8 +173,6 @@ impl Fantasma {
         if let Ok(plan) = self.chanel.receiber().try_recv() {
             if let Some(ruta) = plan {
                 self.ruta = ruta;
-            } else {
-                self.ruta = VecDeque::new();
             }
             self.estado = super::utils::State::Execute;
         }
